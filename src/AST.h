@@ -67,7 +67,7 @@ public:
     int number;
 
     void Dump() const override {
-        std::cout << "return " << number << ";" ;
+        std::cout << "StmtAST { " << number << " }" ;
     }
 };
 
