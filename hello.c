@@ -1,4 +1,6 @@
+/* This is a comment. */
 int main() {
-
-    return 1;
+//   This is also a comment.
+  return 3;
 }
+

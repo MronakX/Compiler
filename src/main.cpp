@@ -4,7 +4,12 @@
 #include <memory>
 #include <string>
 #include "AST.h"
+#include <fstream>
+
+#include <stdio.h>
 using namespace std;
+
+// #define DEBUG
 
 // 声明 lexer 的输入, 以及 parser 函数
 // 为什么不引用 sysy.tab.hpp 呢? 因为首先里面没有 yyin 的定义
@@ -21,19 +26,32 @@ int main(int argc, const char *argv[]) {
     auto mode = argv[1];
     auto input = argv[2];
     auto output = argv[4];
-
+    
     // 打开输入文件, 并且指定 lexer 在解析的时候读取这个文件
     yyin = fopen(input, "r");
     assert(yyin);
 
+#if DEBUG
+    char buf[1000];
+    auto tmpin = fopen(input, "r");
+    fread(buf, 100, 1, tmpin);
+    printf("%s\n", buf);
+#endif
     // 调用 parser 函数, parser 函数会进一步调用 lexer 解析输入文件的
     unique_ptr<BaseAST> ast;
     auto ret = yyparse(ast);
     assert(!ret);
-
+    if(output)
+    {
+        freopen(output, "w", stdout); 
+        ast->Dump2KooPa();
+        cout << endl;
+        freopen("/dev/console", "w", stdout);
+    }
     // 输出解析得到的 AST, 其实就是个字符串
     // cout << *ast << endl;
-    ast->Dump();
+    // ast->Dump2RawAST();
+    ast->Dump2KooPa();
     cout << endl;
     return 0;
 }
