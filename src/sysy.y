@@ -13,7 +13,7 @@
 
 // 声明 lexer 函数和错误处理函数
 int yylex();
-void yyerror(std::unique_ptr<BaseAST> &ast, const char *s);
+void yyerror(std::unique_ptr<BaseAST> &ast, std::unique_ptr<ExpBaseAST> &exp_ast, const char *s);
 
 using namespace std;
 
@@ -24,6 +24,7 @@ using namespace std;
 // 解析完成后, 我们要手动修改这个参数, 把它设置成解析得到的字符串
 // %parse-param { std::unique_ptr<std::string> &ast }
 %parse-param { std::unique_ptr<BaseAST> &ast }
+%parse-param { std::unique_ptr<ExpBaseAST> &exp_ast }
 
 // yylval 的定义, 我们把它定义成了一个联合体 (union)
 // 因为 token 的值有的是字符串指针, 有的是整数
@@ -34,6 +35,7 @@ using namespace std;
     std::string *str_val;
     int int_val;
     BaseAST *ast_val;
+    ExpBaseAST *exp_ast_val;
 }
 
 // lexer 返回的所有 token 种类的声明
@@ -43,8 +45,10 @@ using namespace std;
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Block Stmt 
+%type <ast_val> FuncDef FuncType Block Stmt
 %type <int_val> Number
+%type <str_val> UnaryOp
+%type <exp_ast_val> Exp PrimaryExp UnaryExp
 
 %%
 
@@ -99,9 +103,10 @@ Block
     ;
 
 Stmt
-    : RETURN Number ';' {
+    : RETURN Exp ';' {
         auto ast = new StmtAST();
-        ast->number = $2;
+        // ast->number = $2;
+        ast->exp = unique_ptr<ExpBaseAST>($2);
         $$ = ast;
     }
     ;
@@ -113,10 +118,65 @@ Number
     }
     ;
 
+Exp
+  : UnaryExp {
+    auto exp = new ExpAST();
+    exp->exp = unique_ptr<ExpBaseAST>($1);
+    $$ = exp;
+  }
+  ;
+
+PrimaryExp
+  : '(' Exp ')' {
+    auto primary_exp = new PrimaryExpAST();
+    primary_exp->type = PrimaryExpAST::EXP;
+    primary_exp->exp = unique_ptr<ExpBaseAST>($2);
+    $$ = primary_exp;
+  }
+  | Number {
+    auto primary_exp = new PrimaryExpAST();
+    primary_exp->type = PrimaryExpAST::NUMBER;
+    primary_exp->number = ($1);
+    $$ = primary_exp;
+  }
+  ;
+
+
+UnaryExp
+  : PrimaryExp {
+    auto unary_exp = new UnaryExpAST();
+    unary_exp->type = UnaryExpAST::PRIMARY;
+    unary_exp->exp = unique_ptr<ExpBaseAST>($1);
+    $$ = unary_exp;
+  }
+  | UnaryOp UnaryExp {
+    auto unary_exp = new UnaryExpAST();
+    unary_exp->type = UnaryExpAST::UNARY;
+    unary_exp->op = *unique_ptr<string>($1);
+    unary_exp->exp = unique_ptr<ExpBaseAST>($2);
+    $$ = unary_exp;
+  }
+  ;
+
+UnaryOp
+  : '+' {
+    string *op = new string("+");
+    $$ = op;
+  }
+  | '-' {
+    string *op = new string("-");
+    $$ = op;
+  }
+  | '!' {
+    string *op = new string("!");
+    $$ = op;
+  }
+  ;
+
 %%
 
 // 定义错误处理函数, 其中第二个参数是错误信息
 // parser 如果发生错误 (例如输入的程序出现了语法错误), 就会调用这个函数
-void yyerror(unique_ptr<BaseAST> &ast, const char *s) {
+void yyerror(unique_ptr<BaseAST> &ast, unique_ptr<ExpBaseAST> &exp_ast, const char *s) {
     cerr << "error: " << s << endl;
 }

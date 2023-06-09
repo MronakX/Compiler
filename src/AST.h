@@ -2,6 +2,9 @@
 
 #include <iostream>
 
+// global count for variables.
+inline int var_cnt = 0;
+
 // 所有 AST 的基类
 class BaseAST {
 public:
@@ -91,18 +94,98 @@ public:
     }
 };
 
-class StmtAST : public BaseAST {
+
+class ExpBaseAST {
 public:
-    // std::unique_ptr<BaseAST> statement;
-    int number;
+    virtual ~ExpBaseAST() = default;
+    virtual std::string ExpDump2KooPa() const = 0;
+};
 
-    void Dump2RawAST() const override {
-        std::cout << "StmtAST { " << number << " }" ;
-    }
+class ExpAST : public ExpBaseAST{
+    public:
+    std::unique_ptr<ExpBaseAST> exp;
 
-    void Dump2KooPa() const override {
-        std::cout << "ret " << number << std::endl;
+    std::string ExpDump2KooPa() const override {
+        auto cur_var = exp->ExpDump2KooPa();
+        return cur_var;
     }
 };
 
-// number is JUST the darn number, so no 'NumberAST' is required
+class StmtAST : public BaseAST {
+public:
+    // std::unique_ptr<BaseAST> statement;
+    // int number;
+    std::unique_ptr<ExpBaseAST> exp;
+
+    void Dump2RawAST() const override {
+    }
+
+    void Dump2KooPa() const override {
+        // std::cout << "ret ";
+        auto cur_var = exp->ExpDump2KooPa();
+        std::cout << "ret ";
+        std::cout << cur_var << std::endl;
+    }
+};
+
+// number is JUST the goddarn number, so no 'NumberAST' is required
+
+
+// PrimaryExp  ::= "(" Exp ")" | Number;
+class PrimaryExpAST : public ExpBaseAST {
+    public:
+    enum Type {
+        EXP, 
+        NUMBER,
+    } type;
+    std::unique_ptr<ExpBaseAST> exp;
+    int number;
+    std::string ExpDump2KooPa() const override {
+        if (type == EXP){
+            auto cur_var = exp->ExpDump2KooPa();
+            return cur_var;
+        }
+        else if (type == NUMBER) {
+            auto cur_var = std::to_string(number);
+            return cur_var;
+        }
+    }
+};
+
+// UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
+// UnaryOp is just like a number,  just a single mark, so no AST definition is required
+class UnaryExpAST : public ExpBaseAST {
+public:
+    enum Type {
+        PRIMARY,
+        UNARY
+    } type;
+    std::unique_ptr<ExpBaseAST> exp;
+    std::string op;
+    std::string ExpDump2KooPa() const override {
+        if (type == PRIMARY) {
+            auto cur_var = exp->ExpDump2KooPa();
+            return cur_var;
+        }
+        else if (type == UNARY) {
+            auto prev_var = exp->ExpDump2KooPa();   // could be a variable(%1) or a number(6)
+            std::string cur_var = "%" + std::to_string(var_cnt++);
+            switch(op[0]) {
+                case '+':   // no IR for add
+                    // break;
+                    var_cnt--;
+                    return prev_var;
+                case '-':
+                    std::cout << cur_var << " = sub 0, " << prev_var << std::endl;
+                    break;
+                case '!':
+                    std::cout << cur_var << " = eq " << prev_var << ", 0" << std::endl;
+                    break;
+                default:
+                    break;
+            }
+            return cur_var;
+        }
+    }
+};
+
