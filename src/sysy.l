@@ -10,7 +10,6 @@
 // 所以需要 include Bison 生成的头文件
 #include "sysy.tab.hpp"
 using namespace std;
-
 %}
 
 /* 空白符和注释 */
@@ -30,6 +29,7 @@ Hexadecimal 0[xX][0-9a-fA-F]+
 {AdvancedComment}   { /* 忽略, 不做任何操作 */ }
 "int"           { return INT; }
 "return"        { return RETURN; }
+"const"         { return CONST_TOKEN; }
 {Identifier}    { yylval.str_val = new string(yytext); return IDENT; }
 {Decimal}       { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
 {Octal} { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }

@@ -4,17 +4,36 @@
 // CompUnitAST
 void CompUnitAST::Dump2KooPa() const {
     // std::cout << "CompUnitAST { ";
+
+    symbol_table_t global_symbol_table;
+    symbol_table_vec.push_back(global_symbol_table);
+
     func_def->Dump2KooPa();
     // std::cout << " }";
+    symbol_table_vec.pop_back();
 }
+
 
 // FuncDefAST
 void FuncDefAST::Dump2KooPa() const {
+    // in koopa, no duplicate symbol_name in each function
+    // so whenever we change function, reset var_cnt & ident_cnt_map
+    std::map<std::string, int> prev_ident_cnt_map = ident_cnt_map;
+    int prev_var_cnt = var_cnt;
+
+    symbol_table_t func_symbol_table;
+    symbol_table_vec.push_back(func_symbol_table);
+
     std::cout << "fun @" << ident;
     func_type->Dump2KooPa();
     std::cout << " {" << std::endl;
+    std::cout << "%entry :" << std::endl;
     block->Dump2KooPa();
     std::cout << "}";
+
+    var_cnt = prev_var_cnt;
+    ident_cnt_map = prev_ident_cnt_map; // backtrace when changing scope
+    symbol_table_vec.pop_back();
 }
 
 
@@ -27,13 +46,101 @@ void FuncTypeAST::Dump2KooPa() const {
         std::cout << ident;
 }
 
+void BTypeAST::Dump2KooPa() const {
+    return;
+}
+
+void LValAST::Dump2KooPa() const {
+    return;
+}
+
+
+
+// DeclAST
+void DeclAST::Dump2KooPa() const {
+    // std::unique_ptr<ConstDeclAST> const_decl_ptr(dynamic_cast<ConstDeclAST*>(const_decl.get()));
+    // const_decl_ptr->constdeclfunc();
+
+    if (type == CONST) {
+        const_decl->Dump2KooPa();
+    }
+    else if (type == VAR) { 
+        var_decl->Dump2KooPa();
+    }
+
+}
+
+void ConstDeclAST::Dump2KooPa() const {
+    int size = const_def_vec.size();
+    for (int i = 0; i < size; i++) {
+        const_def_vec[i]->Dump2KooPa();
+    }
+}
+
+
+void ConstDefAST::Dump2KooPa() const {
+    int idx = GETSCOPEIDX();
+    symbol_table_vec[idx][ident] = DERIVED_PTR(ConstInitValAST, const_init_val)->CalcInitVal();
+}
+
+void ConstInitValAST::Dump2KooPa() const {
+    return;
+}
+
+void InitValAST::Dump2KooPa() const {
+    return;
+}
+
+
+void VarDeclAST::Dump2KooPa() const {
+    int size = var_def_vec.size();
+    for (int i = 0; i < size; i++) {
+        var_def_vec[i]->Dump2KooPa();
+    }
+}
+
+std::string InitValAST::ExpDump2Koopa() {
+    std::string ret;
+    ret = exp->ExpDump2KooPa();
+    return ret;
+}
+
+void VarDefAST::Dump2KooPa() const {
+    //  @x = alloc i32
+    int ident_cnt = ++ident_cnt_map[ident];
+    symbol_name_t symbol_name = "@" + ident + "_" + std::to_string(ident_cnt);
+    std::cout << TAB << symbol_name << " = alloc i32" << std::endl;
+    int idx = GETSCOPEIDX();
+    symbol_table_vec[idx][ident] = symbol_name;
+    if (type == INIT_VAL) {
+        std::string ret_val = DERIVED_PTR(InitValAST, init_val)->ExpDump2Koopa();
+        std::cout << TAB << "store " << ret_val << ", " << symbol_name << std:: endl;
+    }
+}
+
 
 // BlockAST
 void BlockAST::Dump2KooPa() const {
-    std::cout << "%entry :" << std::endl;
-    statement->Dump2KooPa();
+    // each block has only ONE scope, NOT scope per blockitem
+    symbol_table_t symbol_table;
+    symbol_table_vec.push_back(symbol_table);
+    int size = block_item_vec.size();
+    for (int i = 0; i < size; i++) {
+        block_item_vec[i]->Dump2KooPa();
+    }
+
+    symbol_table_vec.pop_back();
 }
 
+// BlockItem
+void BlockItemAST::Dump2KooPa() const {
+    if (type == DECL) {
+        decl->Dump2KooPa();
+    }
+    else if (type == STMT) {
+        stmt->Dump2KooPa();
+    }
+}
 
 // ExpAST
 std::string ExpAST::ExpDump2KooPa() const {
@@ -45,9 +152,45 @@ std::string ExpAST::ExpDump2KooPa() const {
 // StmtAST
 void StmtAST::Dump2KooPa() const {
     // std::cout << "ret ";
-    auto cur_var = exp->ExpDump2KooPa();
-    std::cout << TAB << "ret ";
-    std::cout << cur_var << std::endl;
+    if (type == RET) {
+        auto cur_var = exp->ExpDump2KooPa();
+        std::cout << TAB << "ret ";
+        std::cout << cur_var << std::endl;
+    }
+    else if (type == EMPTY_RET) {
+        std::cout << TAB << "ret" << std::endl;
+    }
+    else if (type == LVAL) {
+        std::string lval_ident = DERIVED_PTR(LValAST, lval)->ident;
+        // search bottom-up to find the closest variable.
+        symbol_t symbol;
+        int scope_num = symbol_table_vec.size();
+        for (int i = scope_num - 1; i >= 0; i--) {
+            if (symbol_table_vec[i].count(lval_ident) != 0) {
+                symbol = symbol_table_vec[i][lval_ident];
+                break;
+            }
+        }
+        if (const int* ptr = std::get_if<int>(&symbol) ) {
+            // should not be integer..
+            std::string res = std::to_string(std::get<int>(symbol));
+            // return res;
+        }
+        else if (const std::string* ptr = std::get_if<std::string>(&symbol)) {
+            std::string res = std::get<std::string>(symbol);
+            std::string cur_var = exp->ExpDump2KooPa();
+            std::cout << TAB << "store " << cur_var << ", " << res << std::endl;
+        }
+    }
+    else if (type == EXP) {
+        exp->Dump2KooPa();
+    }
+    else if (type == EMPTY_EXP) {
+        // do nothing
+    }
+    else if (type == BLOCK) {
+        block->Dump2KooPa();
+    }
 }
 
 // PrimaryExpAST
@@ -59,6 +202,28 @@ std::string PrimaryExpAST::ExpDump2KooPa() const {
     else if (type == NUMBER) {
         auto cur_var = std::to_string(number);
         return cur_var;
+    }
+    else if (type == LVAL) {
+        std::string lval_ident = DERIVED_PTR(LValAST, lval)->ident;
+        symbol_t symbol;
+        int scope_num = symbol_table_vec.size();
+        for (int i = scope_num - 1; i >= 0; i--) {
+            if (symbol_table_vec[i].count(lval_ident) != 0) {
+                symbol = symbol_table_vec[i][lval_ident];
+                break;
+            }
+        }
+        if (const int* ptr = std::get_if<int>(&symbol) ) {
+            auto res = std::to_string(std::get<int>(symbol));
+            return res;
+        }
+        else if (const std::string* ptr = std::get_if<std::string>(&symbol)) {
+            std::string res = std::get<std::string>(symbol);
+            std::string cur_var = "%" + std::to_string(var_cnt++);
+            symbol_name_t symbol_name = std::get<std::string>(symbol); 
+            std::cout << "  " << cur_var << " = load " << symbol_name << std::endl;
+            return cur_var;
+        }
     }
     return "";
 }
@@ -151,6 +316,7 @@ std::string AddExpAST::ExpDump2KooPa() const {
 }
 
 
+// RelExpAST
 std::string RelExpAST::ExpDump2KooPa() const {
     if (type == ADD) {
         auto cur_var = add_exp->ExpDump2KooPa();
@@ -185,6 +351,8 @@ std::string RelExpAST::ExpDump2KooPa() const {
     return "";
 }
 
+
+// EqExpAST
 std::string EqExpAST::ExpDump2KooPa() const {
     if (type == REL) {
         auto cur_var = rel_exp->ExpDump2KooPa();
@@ -214,6 +382,7 @@ std::string EqExpAST::ExpDump2KooPa() const {
 }
 
 
+// LAndExpAST
 std::string LAndExpAST::ExpDump2KooPa() const {
     if (type == EQ) {
         auto cur_var = eq_exp->ExpDump2KooPa();
@@ -245,6 +414,7 @@ std::string LAndExpAST::ExpDump2KooPa() const {
     return "";
 }
 
+// LOrExpAST
 std::string LOrExpAST::ExpDump2KooPa() const {
     if (type == LAND) {
         auto cur_var = land_exp->ExpDump2KooPa();
