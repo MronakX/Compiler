@@ -40,7 +40,7 @@ using namespace std;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN CONST_TOKEN IF ELSE
+%token INT RETURN CONST_TOKEN IF ELSE WHILE CONTINUE BREAK
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 
@@ -142,6 +142,7 @@ Block
     }
     ;
 
+// reference from https://en.wikipedia.org/wiki/Dangling_else
 Stmt 
   : OpenStmt {
     auto stmt = ($1);
@@ -169,6 +170,13 @@ OpenStmt
     stmt->else_stmt = unique_ptr<BaseAST>($7);
     $$ = stmt;
   }
+  | WHILE '(' Exp ')' OpenStmt {
+    auto stmt = new WhileStmtAST();
+    stmt->type = WhileStmtAST::WHILE;
+    stmt->while_exp = unique_ptr<ExpBaseAST>($3);
+    stmt->while_stmt = unique_ptr<BaseAST> ($5);
+    $$ = stmt;
+  }
   ;
 
 
@@ -183,6 +191,13 @@ ClosedStmt
         stmt->if_exp = unique_ptr<ExpBaseAST>($3);
         stmt->if_stmt = unique_ptr<BaseAST>($5);
         stmt->else_stmt = unique_ptr<BaseAST>($7);
+        $$ = stmt;
+    }
+    | WHILE '(' Exp ')' ClosedStmt {
+        auto stmt = new WhileStmtAST();
+        stmt->type = WhileStmtAST::WHILE;
+        stmt->while_exp = unique_ptr<ExpBaseAST>($3);
+        stmt->while_stmt = unique_ptr<BaseAST> ($5);
         $$ = stmt;
     }
     ;
@@ -223,6 +238,18 @@ BasicStmt
     | RETURN ';' {
       auto stmt = new BasicStmtAST();
       stmt->type = BasicStmtAST::EMPTY_RET;
+      stmt->exp = nullptr;
+      $$ = stmt;
+    }
+    | CONTINUE ';' {
+      auto stmt = new BasicStmtAST();
+      stmt->type = BasicStmtAST::CONTINUE;
+      stmt->exp = nullptr;
+      $$ = stmt;
+    }
+    | BREAK ';' {
+      auto stmt = new BasicStmtAST();
+      stmt->type = BasicStmtAST::BREAK;
       stmt->exp = nullptr;
       $$ = stmt;
     }

@@ -165,7 +165,7 @@ void BasicStmtAST::Dump2KooPa() const {
         // add a dummy block for every ret.
         // dummy is unreachable, to guarantee only one "br/jump/ret" per block
         // stupid but seems work...
-        std::string dummy_ident = "%dummy" + std::to_string(dummy_cnt++);
+        std::string dummy_ident = "%dummy_" + std::to_string(dummy_cnt++);
         std::cout << dummy_ident << ":" << std::endl;
     }
     else if (type == EMPTY_RET) {
@@ -202,6 +202,24 @@ void BasicStmtAST::Dump2KooPa() const {
     else if (type == BLOCK) {
         block->Dump2KooPa();
     }
+    else if (type == CONTINUE) {
+        int last_idx = GET_LAST_ELEMENT_FROM_VECTOR(while_table_vec);
+        int last_while_num = while_table_vec[last_idx];
+        std::string last_while_entry = "%while_entry_" + std::to_string(last_while_num);
+        std::string ident_continue =  "%while_continue_" + std::to_string(last_while_num);
+        std::cout << "  " << "jump " << last_while_entry << std::endl;
+        // dummy here
+        std::cout << ident_continue << ":" << std::endl;
+    }
+    else if (type == BREAK) {
+        int last_idx = GET_LAST_ELEMENT_FROM_VECTOR(while_table_vec);
+        int last_while_num = while_table_vec[last_idx];
+        std::string last_while_end = "%while_end_" + std::to_string(last_while_num);
+        std::string ident_break = "%while_break_" + std::to_string(last_while_num);
+        std::cout << "  " << "jump " << last_while_end << std::endl;
+        // dummy here
+        std::cout << ident_break << ":" << std::endl;
+    }
 }
 
 void IfElseStmtAST::Dump2KooPa() const {
@@ -231,6 +249,27 @@ void IfElseStmtAST::Dump2KooPa() const {
         else_stmt->Dump2KooPa();
         std::cout << TAB << "jump " << end_ident << std::endl;
         std::cout << end_ident << ":" << std::endl;
+    }
+}
+
+void WhileStmtAST::Dump2KooPa() const {
+    if(type == WHILE) {
+        // get the closest index for the closest "while"
+        while_table_vec.push_back(while_cnt);
+        std::string ident_while_entry = "%while_entry_" + std::to_string(while_cnt);
+        std::string ident_while_body = "%while_body_" + std::to_string(while_cnt);
+        std::string ident_while_end = "%while_end_" + std::to_string(while_cnt++);
+
+        std::cout << "  " << "jump " << ident_while_entry << std::endl;
+        std::cout << ident_while_entry << ":" << std::endl;
+        std::string ret_var = while_exp->ExpDump2KooPa();
+        std::cout << "  " << "br " << ret_var << ", " << ident_while_body << ", " << ident_while_end << std::endl;
+        std::cout << ident_while_body << ":" << std::endl;
+        while_stmt->Dump2KooPa();
+        std::cout << "  " << "jump " << ident_while_entry << std::endl;
+        std::cout << ident_while_end << ":" << std::endl;
+
+        while_table_vec.pop_back();
     }
 }
 

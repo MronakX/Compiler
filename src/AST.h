@@ -10,6 +10,7 @@
 inline int var_cnt = 0;
 inline int if_cnt = 0;
 inline int dummy_cnt = 0;
+inline int while_cnt = 0;
 
 #define TAB "  "
 
@@ -17,6 +18,9 @@ inline int dummy_cnt = 0;
     dynamic_cast<derived_class*>(src_ptr.get())
 
 #define GETSCOPEIDX() symbol_table_vec.size() - 1
+#define GET_LAST_ELEMENT_FROM_VECTOR(vec) vec.size() - 1 
+
+inline std::vector<int> while_table_vec;
 
 inline std::vector<symbol_table_t> symbol_table_vec;
 inline std::map<std::string, int> ident_cnt_map;  //for dupicate symbol_name (inside diffrent func scope)
@@ -241,6 +245,17 @@ public:
     void Dump2KooPa() const override;
 };
 
+class WhileStmtAST : public BaseAST {
+public:
+    enum Type {
+        WHILE,
+    } type;
+    std::unique_ptr<ExpBaseAST> while_exp;
+    std::unique_ptr<BaseAST> while_stmt;
+
+    void Dump2KooPa() const override;
+};
+
 class BasicStmtAST : public BaseAST {
 public:
     enum Type {
@@ -250,6 +265,8 @@ public:
         RET,
         EMPTY_RET,
         EMPTY_EXP,
+        CONTINUE,
+        BREAK,
     } type;
     std::unique_ptr<BaseAST> lval;
     std::unique_ptr<ExpBaseAST> exp;

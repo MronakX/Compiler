@@ -32,6 +32,10 @@ Hexadecimal 0[xX][0-9a-fA-F]+
 "const"         { return CONST_TOKEN; }
 "if"            { return IF; }
 "else"          { return ELSE; }
+"while"         { return WHILE; }
+"continue"      { return CONTINUE; }
+"break"         { return BREAK; }
+
 {Identifier}    { yylval.str_val = new string(yytext); return IDENT; }
 {Decimal}       { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
 {Octal} { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
