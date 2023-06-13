@@ -8,6 +8,7 @@
 
 // global count for variables.
 inline int var_cnt = 0;
+inline int if_cnt = 0;
 
 #define TAB "  "
 
@@ -226,7 +227,20 @@ class ExpAST : public ExpBaseAST{
     int CalcExpVal() const override;
 };
 
-class StmtAST : public BaseAST {
+class IfElseStmtAST : public BaseAST {
+public:
+    enum Type {
+        IF,
+        IF_ELSE,
+    } type;
+    std::unique_ptr<ExpBaseAST> if_exp;
+    std::unique_ptr<BaseAST> if_stmt;
+    std::unique_ptr<BaseAST> else_stmt;
+
+    void Dump2KooPa() const override;
+};
+
+class BasicStmtAST : public BaseAST {
 public:
     enum Type {
         LVAL,

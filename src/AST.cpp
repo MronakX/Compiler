@@ -20,6 +20,7 @@ void FuncDefAST::Dump2KooPa() const {
     // so whenever we change function, reset var_cnt & ident_cnt_map
     std::map<std::string, int> prev_ident_cnt_map = ident_cnt_map;
     int prev_var_cnt = var_cnt;
+    int prev_if_cnt = if_cnt;
 
     symbol_table_t func_symbol_table;
     symbol_table_vec.push_back(func_symbol_table);
@@ -32,6 +33,7 @@ void FuncDefAST::Dump2KooPa() const {
     std::cout << "}";
 
     var_cnt = prev_var_cnt;
+    if_cnt = prev_if_cnt;
     ident_cnt_map = prev_ident_cnt_map; // backtrace when changing scope
     symbol_table_vec.pop_back();
 }
@@ -149,8 +151,8 @@ std::string ExpAST::ExpDump2KooPa() const {
 }
 
 
-// StmtAST
-void StmtAST::Dump2KooPa() const {
+// BasicStmtAST
+void BasicStmtAST::Dump2KooPa() const {
     // std::cout << "ret ";
     if (type == RET) {
         auto cur_var = exp->ExpDump2KooPa();
@@ -193,6 +195,36 @@ void StmtAST::Dump2KooPa() const {
     }
 }
 
+void IfElseStmtAST::Dump2KooPa() const {
+    if (type == IF) {
+        std::string exp_var = DERIVED_PTR(ExpAST, if_exp)->ExpDump2KooPa();
+        std::string then_ident = "%then_" + std::to_string(if_cnt);
+        std::string end_ident = "%end_" + std::to_string(if_cnt++);
+        std::cout << TAB << "br " << exp_var << ", " << then_ident << ", " << end_ident << std::endl;
+
+        std::cout << then_ident << ":" << std::endl;
+        if_stmt->Dump2KooPa();
+        std::cout << TAB << "jump " << end_ident << std::endl;
+        std::cout << end_ident << ":" << std::endl;
+    }
+    else if (type == IF_ELSE) {
+        std::string exp_var = DERIVED_PTR(ExpAST, if_exp)->ExpDump2KooPa();
+        std::string then_ident = "%then_" + std::to_string(if_cnt);
+        std::string else_ident = "%else_" + std::to_string(if_cnt);
+        std::string end_ident = "%end_" + std::to_string(if_cnt++);
+        std::cout << TAB << "br " << exp_var << ", " << then_ident << ", " << else_ident << std::endl;
+
+        std::cout << then_ident << ":" << std::endl;
+        if_stmt->Dump2KooPa();
+        std::cout << TAB << "jump " << end_ident << std::endl;
+
+        std::cout << else_ident << ":" << std::endl;
+        else_stmt->Dump2KooPa();
+        std::cout << TAB << "jump " << end_ident << std::endl;
+        std::cout << end_ident << ":" << std::endl;
+    }
+}
+
 // PrimaryExpAST
 std::string PrimaryExpAST::ExpDump2KooPa() const {
     if (type == EXP){
@@ -221,7 +253,7 @@ std::string PrimaryExpAST::ExpDump2KooPa() const {
             std::string res = std::get<std::string>(symbol);
             std::string cur_var = "%" + std::to_string(var_cnt++);
             symbol_name_t symbol_name = std::get<std::string>(symbol); 
-            std::cout << "  " << cur_var << " = load " << symbol_name << std::endl;
+            std::cout << TAB << cur_var << " = load " << symbol_name << std::endl;
             return cur_var;
         }
     }

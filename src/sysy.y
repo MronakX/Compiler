@@ -45,7 +45,7 @@ using namespace std;
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Block Stmt BType LVal
+%type <ast_val> FuncDef FuncType Block Stmt BType LVal BasicStmt OpenStmt
 %type <int_val> Number
 %type <ast_val> Decl ConstDecl ConstDef BlockItem ConstInitVal VarDecl VarDef InitVal
 %type <str_val> UnaryOp MulOp AddOp RelOp EqOp LandOp LorOp
@@ -142,42 +142,79 @@ Block
     }
     ;
 
-Stmt
-    : LVal '=' Exp ';' {
-        auto stmt = new StmtAST();
-        stmt->type = StmtAST::LVAL;
+Stmt 
+  : BasicStmt {
+    auto stmt = ($1);
+    $$ = stmt;
+  }
+  | OpenStmt {
+    auto stmt = ($1);
+    $$ = stmt;
+  }
+  ;
+
+OpenStmt
+  : IF '(' Exp ')' Stmt {
+    auto stmt = new IfElseStmtAST();
+    stmt->type = IfElseStmtAST::IF;
+    stmt->exp_simple = unique_ptr<BaseAST>($3);
+    stmt->if_stmt = unique_ptr<BaseAST>($5);
+    $$ = stmt;
+  }
+  | IF '(' Exp ')' BasicStmt ELSE OpenStmt {
+    auto stmt = new IfElseStmtAST();
+    stmt->type = IfElseStmtAST::IF_ELSE;
+    stmt->exp_simple = unique_ptr<BaseAST>($3);
+    stmt->if_stmt = unique_ptr<BaseAST>($5);
+    stmt->else_stmt = unique_ptr<BaseAST>($7);
+    $$ = stmt;
+  }
+  ;
+
+BasicStmt
+    : IF '(' Exp ')' BasicStmt ELSE BasicStmt {
+        auto stmt = new IfElseStmtAST();
+        stmt->type = IfElseStmtAST::IF_ELSE;
+        stmt->if_exp = unique_ptr<ExpBaseAST>($3);
+        stmt->if_stmt = unique_ptr<BaseAST>($5);
+        stmt->else_stmt = unique_ptr<BaseAST>($7);
+        $$ = stmt;
+    }
+    | LVal '=' Exp ';' {
+        auto stmt = new BasicStmtAST();
+        stmt->type = BasicStmtAST::LVAL;
         stmt->lval = unique_ptr<BaseAST>($1);
         stmt->exp = unique_ptr<ExpBaseAST>($3);
         $$ = stmt;
     }
     | Exp ';' {
-      auto stmt = new StmtAST();
-      stmt->type = StmtAST::EXP;
+      auto stmt = new BasicStmtAST();
+      stmt->type = BasicStmtAST::EXP;
       stmt->exp = unique_ptr<ExpBaseAST>($1);
       $$ = stmt;
     }
     | ';' {
-      auto stmt = new StmtAST();
-      stmt->type = StmtAST::EMPTY_EXP;
+      auto stmt = new BasicStmtAST();
+      stmt->type = BasicStmtAST::EMPTY_EXP;
       stmt->exp = nullptr;
       $$ = stmt;
     }
     | Block {
-      auto stmt = new StmtAST();
-      stmt->type = StmtAST::BLOCK;
+      auto stmt = new BasicStmtAST();
+      stmt->type = BasicStmtAST::BLOCK;
       stmt->block = unique_ptr<BaseAST>($1);
       $$ = stmt;
     }
     | RETURN Exp ';' {
-        auto stmt = new StmtAST();
+        auto stmt = new BasicStmtAST();
         // ast->number = $2;
         stmt->exp = unique_ptr<ExpBaseAST>($2);
-        stmt->type = StmtAST::RET;
+        stmt->type = BasicStmtAST::RET;
         $$ = stmt;
     }
     | RETURN ';' {
-      auto stmt = new StmtAST();
-      stmt->type = StmtAST::EMPTY_RET;
+      auto stmt = new BasicStmtAST();
+      stmt->type = BasicStmtAST::EMPTY_RET;
       stmt->exp = nullptr;
       $$ = stmt;
     }
