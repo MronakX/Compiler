@@ -40,12 +40,12 @@ using namespace std;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN CONST_TOKEN
+%token INT RETURN CONST_TOKEN IF ELSE
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Block Stmt BType LVal BasicStmt OpenStmt
+%type <ast_val> FuncDef FuncType Block Stmt BType LVal BasicStmt OpenStmt ClosedStmt
 %type <int_val> Number
 %type <ast_val> Decl ConstDecl ConstDef BlockItem ConstInitVal VarDecl VarDef InitVal
 %type <str_val> UnaryOp MulOp AddOp RelOp EqOp LandOp LorOp
@@ -143,11 +143,11 @@ Block
     ;
 
 Stmt 
-  : BasicStmt {
+  : OpenStmt {
     auto stmt = ($1);
     $$ = stmt;
   }
-  | OpenStmt {
+  | ClosedStmt {
     auto stmt = ($1);
     $$ = stmt;
   }
@@ -157,22 +157,27 @@ OpenStmt
   : IF '(' Exp ')' Stmt {
     auto stmt = new IfElseStmtAST();
     stmt->type = IfElseStmtAST::IF;
-    stmt->exp_simple = unique_ptr<BaseAST>($3);
+    stmt->if_exp = unique_ptr<ExpBaseAST>($3);
     stmt->if_stmt = unique_ptr<BaseAST>($5);
     $$ = stmt;
   }
-  | IF '(' Exp ')' BasicStmt ELSE OpenStmt {
+  | IF '(' Exp ')' ClosedStmt ELSE OpenStmt {
     auto stmt = new IfElseStmtAST();
     stmt->type = IfElseStmtAST::IF_ELSE;
-    stmt->exp_simple = unique_ptr<BaseAST>($3);
+    stmt->if_exp = unique_ptr<ExpBaseAST>($3);
     stmt->if_stmt = unique_ptr<BaseAST>($5);
     stmt->else_stmt = unique_ptr<BaseAST>($7);
     $$ = stmt;
   }
   ;
 
-BasicStmt
-    : IF '(' Exp ')' BasicStmt ELSE BasicStmt {
+
+ClosedStmt
+    : BasicStmt {
+        auto stmt = ($1);
+        $$ = stmt;
+    }
+    | IF '(' Exp ')' ClosedStmt ELSE ClosedStmt {
         auto stmt = new IfElseStmtAST();
         stmt->type = IfElseStmtAST::IF_ELSE;
         stmt->if_exp = unique_ptr<ExpBaseAST>($3);
@@ -180,7 +185,10 @@ BasicStmt
         stmt->else_stmt = unique_ptr<BaseAST>($7);
         $$ = stmt;
     }
-    | LVal '=' Exp ';' {
+    ;
+
+BasicStmt
+    : LVal '=' Exp ';' {
         auto stmt = new BasicStmtAST();
         stmt->type = BasicStmtAST::LVAL;
         stmt->lval = unique_ptr<BaseAST>($1);

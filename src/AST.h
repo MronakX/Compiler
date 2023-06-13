@@ -9,6 +9,7 @@
 // global count for variables.
 inline int var_cnt = 0;
 inline int if_cnt = 0;
+inline int dummy_cnt = 0;
 
 #define TAB "  "
 

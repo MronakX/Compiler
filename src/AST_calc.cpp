@@ -177,8 +177,11 @@ int LAndExpAST::CalcExpVal() const {
     }
     else if (type == LAND) {
         int land_val = land_exp->CalcExpVal();   // could be a variable(%1) or a number(6)
-        int eq_val = eq_exp->CalcExpVal();
-        int res = land_val && eq_val;
+        int res = 0;
+        if (land_val == 1) {
+            int eq_val = eq_exp->CalcExpVal();
+            res = (eq_val != 0);
+        }
         return res;
     }
     return -1;
@@ -191,8 +194,11 @@ int LOrExpAST::CalcExpVal() const {
     }
     else if (type == LOR) {
         int lor_val = lor_exp->CalcExpVal();
-        int land_val = land_exp->CalcExpVal();
-        int res = lor_val || land_val;
+        int res = 1;
+        if(lor_val == 0) {
+            int land_val = land_exp->CalcExpVal();
+            res = (land_val != 0);
+        }
         return res;
     }
     return -1;

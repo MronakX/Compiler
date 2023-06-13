@@ -21,7 +21,8 @@ void FuncDefAST::Dump2KooPa() const {
     std::map<std::string, int> prev_ident_cnt_map = ident_cnt_map;
     int prev_var_cnt = var_cnt;
     int prev_if_cnt = if_cnt;
-
+    int prev_dummy_cnt = dummy_cnt;
+    
     symbol_table_t func_symbol_table;
     symbol_table_vec.push_back(func_symbol_table);
 
@@ -30,10 +31,13 @@ void FuncDefAST::Dump2KooPa() const {
     std::cout << " {" << std::endl;
     std::cout << "%entry :" << std::endl;
     block->Dump2KooPa();
-    std::cout << "}";
+    // add ret for last @dummy, seems stupid but no corner emitted case, i guess
+    std::cout << TAB << "ret" << std::endl;
+    std::cout << "}" << std::endl;
 
     var_cnt = prev_var_cnt;
     if_cnt = prev_if_cnt;
+    dummy_cnt = prev_dummy_cnt;
     ident_cnt_map = prev_ident_cnt_map; // backtrace when changing scope
     symbol_table_vec.pop_back();
 }
@@ -158,6 +162,11 @@ void BasicStmtAST::Dump2KooPa() const {
         auto cur_var = exp->ExpDump2KooPa();
         std::cout << TAB << "ret ";
         std::cout << cur_var << std::endl;
+        // add a dummy block for every ret.
+        // dummy is unreachable, to guarantee only one "br/jump/ret" per block
+        // stupid but seems work...
+        std::string dummy_ident = "%dummy" + std::to_string(dummy_cnt++);
+        std::cout << dummy_ident << ":" << std::endl;
     }
     else if (type == EMPTY_RET) {
         std::cout << TAB << "ret" << std::endl;
@@ -421,27 +430,37 @@ std::string LAndExpAST::ExpDump2KooPa() const {
         return cur_var;
     }
     else if (type == LAND) {
+        // int result = 0;
+        // if (lhs == 1) {
+        // result = (rhs != 0);
+        // }
         auto land_var = land_exp->ExpDump2KooPa();   // could be a variable(%1) or a number(6)
-        auto eq_var = eq_exp->ExpDump2KooPa();
-        std::string tmp_land_var = "%" + std::to_string(var_cnt++);
-        std::string tmp_eq_var = "%" + std::to_string(var_cnt++);
         std::string cur_var = "%" + std::to_string(var_cnt++);
-        // %0 = (land_var ne 0)
-        // %1 = (eq_var ne 0)
-        // %2 = (%0 and %1), 'and' here is bit_and. 
-        // %2 is true iff. (landvar != 0 and eqvar != 0), %1 = 1 and %2 = 1
-        switch(_OpHash(op)) {
-            case eLAND: 
-                // TAB %1 = ne %0, 0\n
-                // TAB %3 = and %1, %2\n
-                std::cout << TAB << tmp_land_var << " = ne " << land_var << ", 0" << std::endl;
-                std::cout << TAB << tmp_eq_var << " = ne " << eq_var << ", 0" << std::endl;
-                std::cout << TAB << cur_var << " = and " << tmp_land_var << ", " << tmp_eq_var << std::endl;
-                break;
-            default:
-                break;
-        }
-        return cur_var;
+        std::string tmp_res = "%" + std::to_string(var_cnt++);
+
+        std::string then_ident = "%then_" + std::to_string(if_cnt);
+        std::string else_ident = "%else_" + std::to_string(if_cnt);
+        std::string end_ident = "%end_" + std::to_string(if_cnt++);
+
+        std::string res_var = "%" + std::to_string(var_cnt++);
+        
+        std::cout << "  " << res_var << " = alloc i32" << std::endl;
+        std::cout << "  " << "store 0, " << res_var << std::endl;
+        std::cout << "  " << "br " << land_var << ", " << then_ident << ", " << else_ident << std::endl;
+        // if lhs == 1, tmp_res = (rhs != 0), res = tmp_res
+        std::cout << then_ident << ":" << std::endl;
+        std::string tmp_res_var = "%" + std::to_string(var_cnt++);
+        auto eq_var = eq_exp->ExpDump2KooPa();
+        std::cout << "  " << tmp_res_var << " = ne " << eq_var << ", 0" << std::endl;
+        std::cout << "  " << "store " << tmp_res_var << ", " << res_var << std::endl;
+        std::cout << "  " << "jump " << end_ident << std::endl;
+        // else if lhs == 0, do nothing.
+        std::cout << else_ident << ":" << std::endl;
+        std::cout << "  " << "jump " << end_ident << std::endl;
+        std::cout << end_ident << ":" << std::endl;
+        std::string ret_var = "%" + std::to_string(var_cnt++);
+        std::cout << "  " << ret_var << " = load " << res_var << std::endl;
+        return ret_var;
     }
     return "";
 }
@@ -454,21 +473,31 @@ std::string LOrExpAST::ExpDump2KooPa() const {
     }
     else if (type == LOR) {
         auto lor_var = lor_exp->ExpDump2KooPa();   // could be a variable(%1) or a number(6)
-        auto land_var = land_exp->ExpDump2KooPa();
-        std::string tmp_or_var = "%" + std::to_string(var_cnt++);
         std::string cur_var = "%" + std::to_string(var_cnt++);
-        // %0 = (lor_var or %land_var), 'and' here is bit_or. 
-        // %1 = (%0 != 0)
-        // %1 is true iff. (landvar != 0 or eqvar != 0), %0 = 1 (1 != 0)
-        switch(_OpHash(op)) {
-            case eLOR: 
-                std::cout << TAB << tmp_or_var << " = or " << lor_var << ", " << land_var << std::endl;
-                std::cout << TAB << cur_var << " = ne " << tmp_or_var << ", 0" << std::endl;
-                break;
-            default:
-                break;
-        }
-        return cur_var;
+        std::string res_var = "%" + std::to_string(var_cnt++);
+        std::string then_ident = "%then_" + std::to_string(if_cnt);
+        std::string else_ident = "%else_" + std::to_string(if_cnt);
+        std::string end_ident = "%end_" + std::to_string(if_cnt++);
+        
+        std::cout << "  " << res_var << " = alloc i32" << std::endl;
+        std::cout << "  " << "store 1, " << res_var << std::endl;
+        std::cout << "  " << "br " << lor_var << ", " << then_ident << ", " << else_ident << std::endl;
+        // if lor == 1, return res_var, do nothing
+        std::cout << then_ident << ":" << std::endl;
+        std::cout << "  " << "jump " << end_ident << std::endl;
+        // else if lor == 0, tmp_result = (rhs != 0), result = tmp_result
+        std::cout << else_ident << ":" << std::endl;
+        std::string tmp_res_var = "%" + std::to_string(var_cnt++);
+        auto land_var = land_exp->ExpDump2KooPa();
+        std::cout << "  " << tmp_res_var << " = ne " << land_var << ", 0" << std::endl;
+        std::cout << "  " << "store " << tmp_res_var << ", " << res_var << std::endl;
+        std::cout << "  " << "jump " << end_ident << std::endl;
+        std::cout << end_ident << ":" << std::endl;
+        std::string ret_var = "%" + std::to_string(var_cnt++);
+        std::cout << "  " << ret_var << " = load " << res_var << std::endl;
+        // std::cout << TAB << tmp_or_var << " = or " << lor_var << ", " << land_var << std::endl;
+        // std::cout << TAB << cur_var << " = ne " << tmp_or_var << ", 0" << std::endl;
+        return ret_var;
     }
     return "";
 }
