@@ -28,7 +28,7 @@ using namespace std;
 // yylval 的定义, 我们把它定义成了一个联合体 (union)
 // 因为 token 的值有的是字符串指针, 有的是整数
 // 之前我们在 lexer 中用到的 str_val 和 int_val 就是在这里被定义的
-// 至于为什么要用字符串指针而不直接用 string 或者 unique_ptr<string>?
+// 至于为什么要用字符串指针而不直接用 string 或者 unique_ptr<std::string>?
 // 请自行 STFW 在 union 里写一个带析构函数的类会出现什么情况
 %union {
     std::string *str_val;
@@ -40,7 +40,7 @@ using namespace std;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN CONST_TOKEN IF ELSE WHILE CONTINUE BREAK
+%token INT RETURN CONST_TOKEN IF ELSE WHILE CONTINUE BREAK VOID
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 
@@ -48,6 +48,7 @@ using namespace std;
 %type <ast_val> FuncDef FuncType Block Stmt BType LVal BasicStmt OpenStmt ClosedStmt
 %type <int_val> Number
 %type <ast_val> Decl ConstDecl ConstDef BlockItem ConstInitVal VarDecl VarDef InitVal
+%type <ast_val> CompUnit FuncFParams FuncFParam FuncRParams
 %type <str_val> UnaryOp MulOp AddOp RelOp EqOp LandOp LorOp
 %type <exp_ast_val> Exp ConstExp PrimaryExp UnaryExp MulExp AddExp RelExp EqExp LAndExp LOrExp
 %type <vec_ast_val> BlockItemVec ConstDefVec VarDefVec
@@ -59,32 +60,106 @@ using namespace std;
 // 而 parser 一旦解析完 CompUnit, 就说明所有的 token 都被解析了, 即解析结束了
 // 此时我们应该把 FuncDef 返回的结果收集起来, 作为 AST 传给调用 parser 的函数
 // $1 指代规则里第一个符号的返回值, 也就是 FuncDef 的返回值
+CompUnitHead
+  : CompUnit {
+    // auto comp_unit = make_unique<CompUnitAST>();
+    // comp_unit->func_def = unique_ptr<BaseAST>($1);
+    auto comp_unit_head = unique_ptr<BaseAST>($1);
+    ast = move(comp_unit_head);
+  }
+  ;
+
 CompUnit
-    : FuncDef {
-        auto comp_unit = make_unique<CompUnitAST>();
-        comp_unit->func_def = unique_ptr<BaseAST>($1);
-        ast = move(comp_unit);
-    }
-    ;
+  : FuncDef {
+    auto comp_unit = new CompUnitAST();
+    comp_unit->func_def_vec.push_back(std::unique_ptr<BaseAST>($1));
+    $$ = comp_unit;
+  }
+  | Decl {
+    auto comp_unit = new CompUnitAST();
+    comp_unit->decl_vec.push_back(std::unique_ptr<BaseAST>($1));
+    $$ = comp_unit;
+  }
+  | CompUnit FuncDef {
+    CompUnitAST *comp_unit = (CompUnitAST*)($1);
+    comp_unit->func_def_vec.push_back(std::unique_ptr<BaseAST>($2));
+    $$ = comp_unit;
+  }
+  | CompUnit Decl {
+    CompUnitAST *comp_unit = (CompUnitAST*)($1);
+    comp_unit->decl_vec.push_back(std::unique_ptr<BaseAST>($2));
+    $$ = comp_unit;
+  }
+  ;
 
 FuncDef
-    : FuncType IDENT '(' ')' Block {
-        auto ast = new FuncDefAST();
-        ast->func_type = unique_ptr<BaseAST>($1);
-        ast->ident = *unique_ptr<string>($2);
-        ast->block = unique_ptr<BaseAST>($5);
-        $$ = ast;
-    }
-    ;
+  : FuncType IDENT '(' ')' Block {
+    auto func_def = new FuncDefAST();
+    func_def->func_type = unique_ptr<BaseAST>($1);
+    func_def->ident = *unique_ptr<std::string>($2);
+    func_def->func_fparams = nullptr;
+    func_def->block = unique_ptr<BaseAST>($5);
+    $$ = func_def;
+  }
+  | FuncType IDENT '(' FuncFParams ')' Block {
+    auto func_def = new FuncDefAST();
+    func_def->func_type = unique_ptr<BaseAST>($1);
+    func_def->ident = *unique_ptr<std::string>($2);
+    func_def->func_fparams = unique_ptr<BaseAST>($4);
+    func_def->block = unique_ptr<BaseAST>($6);
+    $$ = func_def;
+  }
+  ;
 
-// 同上, 不再解释
+FuncFParams
+  : FuncFParam {
+    auto func_fparams = new FuncFParamsAST();
+    func_fparams->func_fparam_vec.push_back(std::unique_ptr<BaseAST>($1));
+    $$ = func_fparams;
+  }
+  | FuncFParams ',' FuncFParam {
+    FuncFParamsAST *func_fparams = (FuncFParamsAST*)($1);
+    func_fparams->func_fparam_vec.push_back(std::unique_ptr<BaseAST>($3));
+    $$ = func_fparams;
+  }
+  ;
+
+
+FuncFParam
+  : BType IDENT {
+    auto func_fparam = new FuncFParamAST();
+    func_fparam->b_type = std::unique_ptr<BaseAST>($1);
+    func_fparam->ident = *std::unique_ptr<std::string>($2);
+    $$ = func_fparam;
+  }
+  ;
+
+
+FuncRParams
+  : Exp {
+    auto func_rparams = new FuncRParamsAST();
+    func_rparams->func_rparam_vec.push_back(std::unique_ptr<ExpBaseAST>($1));
+    $$ = func_rparams;
+  }
+  | FuncRParams ',' Exp {
+    FuncRParamsAST *func_rparams = (FuncRParamsAST*)($1);
+    func_rparams->func_rparam_vec.push_back(std::unique_ptr<ExpBaseAST>($3));
+    $$ = func_rparams;
+  }
+  ;
+
 FuncType
-    : INT {
-        auto ast = new FuncTypeAST();
-        ast->ident = "int";
-        $$ = ast;
-    }
-    ;
+  : INT {
+    auto ast = new FuncTypeAST();
+    ast->ident = "int";
+    $$ = ast;
+  }
+  | VOID {
+    auto ast = new FuncTypeAST();
+    ast->ident = "void";
+    $$ = ast;
+  }
+  ;
 
 BType
   : INT {
@@ -97,7 +172,7 @@ BType
 LVal
   : IDENT {
     auto lval = new LValAST();
-    lval->ident = *unique_ptr<string>($1);
+    lval->ident = *unique_ptr<std::string>($1);
     $$ = lval;
   }
   ;
@@ -279,7 +354,7 @@ Decl
 ConstDef
   : IDENT '=' ConstInitVal {
     auto const_def = new ConstDefAST();
-    const_def->ident = *unique_ptr<string>($1);
+    const_def->ident = *unique_ptr<std::string>($1);
     const_def->const_init_val = unique_ptr<BaseAST>($3);
     $$ = const_def;
   }
@@ -323,13 +398,13 @@ VarDef
   : IDENT {
     auto var_def = new VarDefAST();
     var_def->type = VarDefAST::iDENT;
-    var_def->ident = *unique_ptr<string>($1);
+    var_def->ident = *unique_ptr<std::string>($1);
     $$ = var_def;
   }
   | IDENT '=' InitVal {
     auto var_def = new VarDefAST();
     var_def->type = VarDefAST::INIT_VAL;
-    var_def->ident = *unique_ptr<string>($1);
+    var_def->ident = *unique_ptr<std::string>($1);
     var_def->init_val = unique_ptr<BaseAST>($3);
     $$ = var_def;
   }
@@ -410,8 +485,22 @@ UnaryExp
   | UnaryOp UnaryExp {
     auto unary_exp = new UnaryExpAST();
     unary_exp->type = UnaryExpAST::UNARY;
-    unary_exp->op = *unique_ptr<string>($1);
+    unary_exp->op = *unique_ptr<std::string>($1);
     unary_exp->exp = unique_ptr<ExpBaseAST>($2);
+    $$ = unary_exp;
+  }
+  | IDENT '(' FuncRParams ')' {
+    auto unary_exp = new UnaryExpAST();
+    unary_exp->type = UnaryExpAST::FUNCR;
+    unary_exp->ident = *unique_ptr<std::string>($1);
+    unary_exp->func_rparams = unique_ptr<BaseAST>($3);
+    $$ = unary_exp;
+  }
+  | IDENT '(' ')' {
+    auto unary_exp = new UnaryExpAST();
+    unary_exp->type = UnaryExpAST::FUNCR;
+    unary_exp->ident = *unique_ptr<std::string>($1);
+    unary_exp->func_rparams = nullptr;
     $$ = unary_exp;
   }
   ;
@@ -513,7 +602,7 @@ MulExp
     auto mul_exp = new MulExpAST();
     mul_exp->type = MulExpAST::MUL;
     mul_exp->mul_exp = std::unique_ptr<ExpBaseAST>($1);
-    mul_exp->op = *unique_ptr<string>($2);
+    mul_exp->op = *unique_ptr<std::string>($2);
     mul_exp->unary_exp = unique_ptr<ExpBaseAST>($3);
     $$ = mul_exp;
   }
@@ -531,7 +620,7 @@ AddExp
     auto add_exp = new AddExpAST();
     add_exp->type = AddExpAST::ADD;
     add_exp->add_exp = std::unique_ptr<ExpBaseAST>($1);
-    add_exp->op = *unique_ptr<string>($2);
+    add_exp->op = *unique_ptr<std::string>($2);
     add_exp->mul_exp = std::unique_ptr<ExpBaseAST>($3);
     $$ = add_exp;
   }
@@ -550,7 +639,7 @@ RelExp
     auto rel_exp = new RelExpAST();
     rel_exp->type = RelExpAST::REL;
     rel_exp->rel_exp = std::unique_ptr<ExpBaseAST>($1);
-    rel_exp->op = *unique_ptr<string>($2);
+    rel_exp->op = *unique_ptr<std::string>($2);
     rel_exp->add_exp = std::unique_ptr<ExpBaseAST>($3);
     $$ = rel_exp;
   }
@@ -568,7 +657,7 @@ EqExp
     auto eq_exp = new EqExpAST();
     eq_exp->type = EqExpAST::EQ;
     eq_exp->eq_exp = std::unique_ptr<ExpBaseAST>($1);
-    eq_exp->op = *unique_ptr<string>($2);
+    eq_exp->op = *unique_ptr<std::string>($2);
     eq_exp->rel_exp = std::unique_ptr<ExpBaseAST>($3);
     $$ = eq_exp;
   }
@@ -586,7 +675,7 @@ LAndExp
     auto land_exp = new LAndExpAST();
     land_exp->type = LAndExpAST::LAND;
     land_exp->land_exp = std::unique_ptr<ExpBaseAST>($1);
-    land_exp->op = *unique_ptr<string>($2);
+    land_exp->op = *unique_ptr<std::string>($2);
     land_exp->eq_exp = std::unique_ptr<ExpBaseAST>($3);
     $$ = land_exp;
   }
@@ -604,7 +693,7 @@ LOrExp
     auto lor_exp = new LOrExpAST();
     lor_exp->type = LOrExpAST::LOR;
     lor_exp->lor_exp = std::unique_ptr<ExpBaseAST>($1);
-    lor_exp->op = *unique_ptr<string>($2);
+    lor_exp->op = *unique_ptr<std::string>($2);
     lor_exp->land_exp = std::unique_ptr<ExpBaseAST>($3);
     $$ = lor_exp;
   }

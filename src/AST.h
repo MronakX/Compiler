@@ -24,7 +24,7 @@ inline std::vector<int> while_table_vec;
 
 inline std::vector<symbol_table_t> symbol_table_vec;
 inline std::map<std::string, int> ident_cnt_map;  //for dupicate symbol_name (inside diffrent func scope)
-
+inline std::map<std::string, std::string> func_table;
 
 // 所有 AST 的基类
 class BaseAST {
@@ -35,13 +35,61 @@ public:
     virtual void Dump2KooPa() const = 0;
 };
 
+class ExpBaseAST : public BaseAST {
+public:
+
+    void Dump2KooPa() const override {
+    }
+
+    virtual ~ExpBaseAST() = default;
+    virtual std::string ExpDump2KooPa() const = 0;
+    virtual int CalcExpVal() const = 0;
+
+    enum OpHashCode {
+        eADD,
+        eSUB,
+        eNOT,
+        eMUL,
+        eDIV,
+        eMOD,
+        eLESS,
+        eGREAT,
+        eLEQ,
+        eGEQ,
+        eEQ,
+        eNEQ,
+        eLAND,
+        eLOR
+    };
+
+    OpHashCode _OpHash (std::string const& op_mark) const {
+        if (op_mark == "+") return eADD;
+        if (op_mark == "-") return eSUB;
+        if (op_mark == "!") return eNOT;
+        if (op_mark == "*") return eMUL;
+        if (op_mark == "/") return eDIV;
+        if (op_mark == "%") return eMOD;
+        if (op_mark == "<") return eLESS;
+        if (op_mark == ">") return eGREAT;
+        if (op_mark == "<=") return eLEQ;
+        if (op_mark == ">=") return eGEQ;
+        if (op_mark == "==") return eEQ;
+        if (op_mark == "!=") return eNEQ;
+        if (op_mark == "&&") return eLAND;
+        if (op_mark == "||") return eLOR;
+        
+        return eADD;
+    }
+};
+
+
 // CompUnit 是 BaseAST
 class CompUnitAST : public BaseAST {
 public:
     // 用智能指针管理对象
-    std::unique_ptr<BaseAST> func_def;
+    std::vector<std::unique_ptr<BaseAST> > func_def_vec;
+    std::vector<std::unique_ptr<BaseAST> > decl_vec;
     void Dump2KooPa() const override;
-
 };
 
 // FuncDef 也是 BaseAST
@@ -50,13 +98,36 @@ public:
     std::unique_ptr<BaseAST> func_type;
     std::string ident;
     std::unique_ptr<BaseAST> block;
+    std::unique_ptr<BaseAST> func_fparams;
 
     void Dump2KooPa() const override;
 };
 
 class FuncTypeAST : public BaseAST {
 public:
+    std::string ident;  //int or void
+
+    void Dump2KooPa() const override;
+};
+
+class FuncFParamsAST : public BaseAST {
+    public:
+    std::vector<std::unique_ptr<BaseAST> > func_fparam_vec;
+
+    void Dump2KooPa() const override;
+};
+
+class FuncFParamAST : public BaseAST {
+    public:
+    std::unique_ptr<BaseAST> b_type;
     std::string ident;
+
+    void Dump2KooPa() const override;
+};
+
+class FuncRParamsAST : public BaseAST {
+    public:
+    std::vector<std::unique_ptr<ExpBaseAST> > func_rparam_vec;
 
     void Dump2KooPa() const override;
 };
@@ -122,53 +193,6 @@ class BlockItemAST : public BaseAST {
     std::unique_ptr<BaseAST> stmt;
 
     void Dump2KooPa() const override;
-};
-
-class ExpBaseAST : public BaseAST {
-public:
-
-    void Dump2KooPa() const override {
-    }
-
-    virtual ~ExpBaseAST() = default;
-    virtual std::string ExpDump2KooPa() const = 0;
-    virtual int CalcExpVal() const = 0;
-
-    enum OpHashCode {
-        eADD,
-        eSUB,
-        eNOT,
-        eMUL,
-        eDIV,
-        eMOD,
-        eLESS,
-        eGREAT,
-        eLEQ,
-        eGEQ,
-        eEQ,
-        eNEQ,
-        eLAND,
-        eLOR
-    };
-
-    OpHashCode _OpHash (std::string const& op_mark) const {
-        if (op_mark == "+") return eADD;
-        if (op_mark == "-") return eSUB;
-        if (op_mark == "!") return eNOT;
-        if (op_mark == "*") return eMUL;
-        if (op_mark == "/") return eDIV;
-        if (op_mark == "%") return eMOD;
-        if (op_mark == "<") return eLESS;
-        if (op_mark == ">") return eGREAT;
-        if (op_mark == "<=") return eLEQ;
-        if (op_mark == ">=") return eGEQ;
-        if (op_mark == "==") return eEQ;
-        if (op_mark == "!=") return eNEQ;
-        if (op_mark == "&&") return eLAND;
-        if (op_mark == "||") return eLOR;
-        
-        return eADD;
-    }
 };
 
 class ConstInitValAST : public BaseAST {
@@ -297,10 +321,14 @@ class UnaryExpAST : public ExpBaseAST {
 public:
     enum Type {
         PRIMARY,
-        UNARY
+        UNARY,
+        FUNCR,
     } type;
     std::unique_ptr<ExpBaseAST> exp;
     std::string op;
+    std::string ident;
+    std::unique_ptr<BaseAST> func_rparams;
+    
     std::string ExpDump2KooPa() const override;
     int CalcExpVal() const override;
 };

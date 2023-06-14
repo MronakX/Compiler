@@ -1,18 +1,54 @@
 #include <iostream>
 #include "AST.h"
 
+void initialize_library_func() {
+    std::cout << "decl @getint(): i32" << std::endl;
+    std::cout << "decl @getch(): i32" << std::endl;
+    std::cout << "decl @getarray(*i32): i32" << std::endl;
+    std::cout << "decl @putint(i32)" << std::endl;
+    std::cout << "decl @putch(i32)" << std::endl;
+    std::cout << "decl @putarray(i32, *i32)" << std::endl;
+    std::cout << "decl @starttime()" << std::endl;
+    std::cout << "decl @stoptime()" << std::endl;
+
+    func_table["getint"] = "int";
+    func_table["getch"] = "int";
+    func_table["getarray"] = "int";
+    func_table["putint"] = "void";
+    func_table["putch"] = "void";
+    func_table["putarray"] = "void";
+    func_table["starttime"] = "void";
+    func_table["stoptime"] = "void";
+}
+
 // CompUnitAST
 void CompUnitAST::Dump2KooPa() const {
-    // std::cout << "CompUnitAST { ";
-
     symbol_table_t global_symbol_table;
     symbol_table_vec.push_back(global_symbol_table);
 
-    func_def->Dump2KooPa();
+    initialize_library_func();
+    for (auto &it : func_def_vec) {
+        it->Dump2KooPa();
+    }
     // std::cout << " }";
     symbol_table_vec.pop_back();
 }
 
+void allocate_function_params() {
+    int idx = GETSCOPEIDX();
+    auto cur_symbol_table = symbol_table_vec[idx];
+    for (auto it : symbol_table_vec[idx]) {
+        symbol_name_t ident = it.first;
+        symbol_name_t at_symbol_name = "@" + ident + "_p";
+        symbol_name_t percent_symbol_name = "%" + ident + "_p";
+        std::string alloc_stmt = percent_symbol_name + " = alloc i32";
+        std::string store_stmt = "store " + at_symbol_name + ", " + percent_symbol_name;
+        // %x = alloc i32
+        // store @x, %x
+        std::cout << TAB << alloc_stmt << std::endl;
+        std::cout << TAB << store_stmt << std::endl;
+    }
+}
 
 // FuncDefAST
 void FuncDefAST::Dump2KooPa() const {
@@ -26,10 +62,24 @@ void FuncDefAST::Dump2KooPa() const {
     symbol_table_t func_symbol_table;
     symbol_table_vec.push_back(func_symbol_table);
 
+    // fun @main
     std::cout << "fun @" << ident;
+    std::string func_type_ident = DERIVED_PTR(FuncTypeAST, func_type)->ident;
+    func_table[ident] = func_type_ident;
+
+    // () or (@x: i32, @y: i32)
+    std::cout << "(";
+    if (func_fparams){
+        func_fparams->Dump2KooPa();
+    }
+    std::cout << ")";
     func_type->Dump2KooPa();
     std::cout << " {" << std::endl;
     std::cout << "%entry :" << std::endl;
+
+    // alloc for function params
+    allocate_function_params();
+
     block->Dump2KooPa();
     // add ret for last @dummy, seems stupid but no corner emitted case, i guess
     std::cout << TAB << "ret" << std::endl;
@@ -45,11 +95,39 @@ void FuncDefAST::Dump2KooPa() const {
 
 // FuncTypeAST
 void FuncTypeAST::Dump2KooPa() const {
-    std::cout << "(): ";
-    if (true)
-        std::cout << "i32";
-    else
-        std::cout << ident;
+    if (ident == "int")
+        std::cout << ": i32";
+    else if (ident == "void") {
+        // if void, skip print
+        // std::cout << "";
+    }
+}
+
+void FuncFParamsAST::Dump2KooPa() const {
+    int size = func_fparam_vec.size();
+    // we need to determine when to print comma, 
+    // so use size as loop indicator
+    // sorry, "for (auto)" :(
+    if (size != 0)
+        func_fparam_vec[0]->Dump2KooPa();
+    for (int i = 1; i < size; i++) {
+        std::cout << ", ";
+        func_fparam_vec[i]->Dump2KooPa();
+    }
+}
+
+void FuncFParamAST::Dump2KooPa() const {
+    symbol_name_t at_symbol_name = "@" + ident + "_p";
+    symbol_name_t percent_symbol_name = "%" + ident + "_p";
+    std::cout << at_symbol_name << ": ";
+    // btype only i32
+    std::cout << "i32";
+    int idx = GETSCOPEIDX();
+    symbol_table_vec[idx][ident] = percent_symbol_name;
+}
+
+void FuncRParamsAST::Dump2KooPa() const {
+    return;
 }
 
 void BTypeAST::Dump2KooPa() const {
@@ -194,7 +272,7 @@ void BasicStmtAST::Dump2KooPa() const {
         }
     }
     else if (type == EXP) {
-        exp->Dump2KooPa();
+        exp->ExpDump2KooPa();
     }
     else if (type == EMPTY_EXP) {
         // do nothing
@@ -310,6 +388,8 @@ std::string PrimaryExpAST::ExpDump2KooPa() const {
 
 // UnaryExpAST
 std::string UnaryExpAST::ExpDump2KooPa() const {
+    // std::cout << "type = " << type << std::endl;
+    // std::cout << "ident = " << ident << std::endl;
     if (type == PRIMARY) {
         auto cur_var = exp->ExpDump2KooPa();
         return cur_var;
@@ -333,6 +413,41 @@ std::string UnaryExpAST::ExpDump2KooPa() const {
         }
         return cur_var;
     }
+    else if (type == FUNCR) {
+        // store for call @half(10)
+        // 1. get all expression dumped
+        // 2. store all return variable
+        std::vector<std::string> rparams_vec;
+        if (func_rparams) {
+            int func_rparam_size = DERIVED_PTR(FuncRParamsAST, func_rparams)->func_rparam_vec.size();
+            for (int i = 0; i < func_rparam_size; i++) {
+                std::string ret_var = DERIVED_PTR(FuncRParamsAST, func_rparams)->func_rparam_vec[i]->ExpDump2KooPa();
+                rparams_vec.push_back(ret_var);
+            }
+        }
+        std::string cur_var = "";
+        if (func_table[ident] == "int") {
+            cur_var = "%" + std::to_string(var_cnt++);
+            std::cout << TAB << cur_var << " = call " << "@" + ident << "(";
+        }
+        else if (func_table[ident] == "void") {
+            std::cout << TAB << "call " << "@" + ident << "(";
+        }
+        else {
+            std::cout << "UNKNOWN FUNC TYPE: " << func_table[ident] << std::endl;
+        }
+        int size = rparams_vec.size();
+        if (size != 0) {
+            std::cout << rparams_vec[0];
+        }
+        for (int i = 1; i < size; i++) {
+            std::cout << ", ";
+            std::cout << rparams_vec[i];
+        }
+        std::cout << ")" << std::endl;
+        return cur_var;
+    }
+
     return "";
 }
 
