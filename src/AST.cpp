@@ -147,7 +147,10 @@ void FuncDefAST::Dump2KooPa() const {
 
     block->Dump2KooPa();
     // add ret for last @dummy, seems stupid but no corner emitted case, i guess
-    std::cout << TAB << "ret" << std::endl;
+    if (func_type_ident == "int")
+        std::cout << TAB << "ret 0" << std::endl;
+    if (func_type_ident == "void")
+        std::cout << TAB << "ret" << std::endl;
     std::cout << "}" << std::endl;
 
     var_cnt = prev_var_cnt;
