@@ -14,7 +14,7 @@ using namespace std;
 
 /* 空白符和注释 */
 WhiteSpace [ \t\n\r]*
-LineComment "//".*$
+LineComment "//".*
 AdvancedComment \/\*([^*"]*|".*"|\*+[^/])*\*\/
 
 /* 标识符 */

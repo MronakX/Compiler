@@ -156,6 +156,8 @@ public:
     std::unique_ptr<BaseAST> var_decl;
 
     void Dump2KooPa() const override;
+
+    void DeclInGlobal();
 };
 
 
@@ -210,6 +212,8 @@ class VarDeclAST : public BaseAST {
     std::vector<std::unique_ptr<BaseAST> > var_def_vec;
 
     void Dump2KooPa() const override;
+
+    void GlobalDump2KooPa();
 };
 
 class VarDefAST : public BaseAST {
@@ -223,6 +227,8 @@ class VarDefAST : public BaseAST {
     std::unique_ptr<BaseAST> init_val;
 
     void Dump2KooPa() const override;
+
+    void GlobalDump2KooPa();
 };
 
 class InitValAST : public BaseAST {

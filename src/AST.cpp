@@ -1,5 +1,7 @@
 #include <iostream>
 #include "AST.h"
+#include <ctype.h>
+#include <algorithm>
 
 void initialize_library_func() {
     std::cout << "decl @getint(): i32" << std::endl;
@@ -21,12 +23,75 @@ void initialize_library_func() {
     func_table["stoptime"] = "void";
 }
 
+void VarDefAST::GlobalDump2KooPa() {
+    //  @x = alloc i32
+    int ident_cnt = ++ident_cnt_map[ident];
+    symbol_name_t symbol_name = "@" + ident + "_" + std::to_string(ident_cnt);
+    int idx = GETSCOPEIDX();
+    symbol_table_vec[idx][ident] = symbol_name;
+    std::cout << "global " << symbol_name << " = alloc i32, ";
+    // int x ---- global @var = alloc i32, zeroinit
+    // OR 
+    // int x = 1；(the rhs must be const expression)
+    // ... store %1, 1;
+    // global @var = alloc i32, zeroinit, 
+    // store
+    // OR
+    // global @var = alloc i32, number (will this happen?)
+    auto is_digit = [&] (const std::string& str) {
+        return !str.empty() && std::all_of(str.begin(), str.end(), ::isdigit);
+    };
+
+    if (type == INIT_VAL) {
+        std::string ret_val = DERIVED_PTR(InitValAST, init_val)->ExpDump2Koopa();
+        if (ret_val == "0") {
+            std::cout << "zeroinit" << std::endl;
+        }
+        else if (is_digit(ret_val)) {
+            std::cout << ret_val << std::endl;
+        }
+        else {
+            std::cout << "zeroinit" << std::endl;
+            std::cout << TAB << "store " << ret_val << ", " << symbol_name << std::endl;
+        }
+    }
+    else if (type == iDENT) {
+        std::cout << "zeroinit" << std::endl;
+    }
+}
+
+void VarDeclAST::GlobalDump2KooPa() {
+    int size = var_def_vec.size();
+    for (int i = 0; i < size; i++) {
+        DERIVED_PTR(VarDefAST, var_def_vec[i])->GlobalDump2KooPa();
+    }
+}
+
+void DeclAST::DeclInGlobal() {
+    // if const, just store in symbol table.
+    // since we always store const in the last scope, nothing more needs to be done.
+    if (type == CONST) {
+        const_decl->Dump2KooPa();
+    }
+    else if (type == VAR) {
+        // this will store all non-const symbol into last symbol table
+        // note that, non-const symbol is string, while const symbol is int32
+        // so we could separte them with get<int>/get<string>
+        DERIVED_PTR(VarDeclAST, var_decl)->GlobalDump2KooPa();
+    }
+}
+
 // CompUnitAST
 void CompUnitAST::Dump2KooPa() const {
     symbol_table_t global_symbol_table;
     symbol_table_vec.push_back(global_symbol_table);
 
     initialize_library_func();
+
+    for (auto &it : decl_vec) {
+        DERIVED_PTR(DeclAST, it)->DeclInGlobal();
+    }
+    
     for (auto &it : func_def_vec) {
         it->Dump2KooPa();
     }

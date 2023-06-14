@@ -11,6 +11,7 @@
 #include <string>
 #include "AST.h"
 #define YYDEBUG 1
+#define YYERROR_VERBOSE 1
 // 声明 lexer 函数和错误处理函数
 int yylex();
 void yyerror(std::unique_ptr<BaseAST> &ast, std::unique_ptr<ExpBaseAST> &exp_ast, const char *s);
@@ -45,7 +46,7 @@ using namespace std;
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Block Stmt BType LVal BasicStmt OpenStmt ClosedStmt
+%type <ast_val> FuncDef BType Block Stmt LVal BasicStmt OpenStmt ClosedStmt
 %type <int_val> Number
 %type <ast_val> Decl ConstDecl ConstDef BlockItem ConstInitVal VarDecl VarDef InitVal
 %type <ast_val> CompUnit FuncFParams FuncFParam FuncRParams
@@ -93,7 +94,7 @@ CompUnit
   ;
 
 FuncDef
-  : FuncType IDENT '(' ')' Block {
+  : BType IDENT '(' ')' Block {
     auto func_def = new FuncDefAST();
     func_def->func_type = unique_ptr<BaseAST>($1);
     func_def->ident = *unique_ptr<std::string>($2);
@@ -101,7 +102,7 @@ FuncDef
     func_def->block = unique_ptr<BaseAST>($5);
     $$ = func_def;
   }
-  | FuncType IDENT '(' FuncFParams ')' Block {
+  | BType IDENT '(' FuncFParams ')' Block {
     auto func_def = new FuncDefAST();
     func_def->func_type = unique_ptr<BaseAST>($1);
     func_def->ident = *unique_ptr<std::string>($2);
@@ -148,7 +149,7 @@ FuncRParams
   }
   ;
 
-FuncType
+BType
   : INT {
     auto ast = new FuncTypeAST();
     ast->ident = "int";
@@ -158,14 +159,6 @@ FuncType
     auto ast = new FuncTypeAST();
     ast->ident = "void";
     $$ = ast;
-  }
-  ;
-
-BType
-  : INT {
-    auto b_type = new BTypeAST();
-    b_type->ident = "int";
-    $$ = b_type;
   }
   ;
 
@@ -193,7 +186,7 @@ BlockItem
   ;
 
 BlockItemVec
-  : {
+  : %empty {
     std::vector<std::unique_ptr<BaseAST> > *block_item_vec = new std::vector<std::unique_ptr<BaseAST> >;
     // block_item_vec->push_back(std::unique_ptr<BaseAST>($1));
     $$ = block_item_vec;
@@ -412,14 +405,14 @@ VarDef
 
 VarDefVec
   : VarDef {
-    std::vector<std::unique_ptr<BaseAST> > *const_var_vec = new std::vector<std::unique_ptr<BaseAST> >;
-    const_var_vec->push_back(std::unique_ptr<BaseAST>($1));
-    $$ = const_var_vec;
+    std::vector<std::unique_ptr<BaseAST> > *var_vec = new std::vector<std::unique_ptr<BaseAST> >;
+    var_vec->push_back(std::unique_ptr<BaseAST>($1));
+    $$ = var_vec;
   }
   | VarDefVec ',' VarDef {
-    std::vector<std::unique_ptr<BaseAST> > *const_var_vec = ($1);
-    const_var_vec->push_back(std::unique_ptr<BaseAST>($3));
-    $$ = const_var_vec;
+    std::vector<std::unique_ptr<BaseAST> > *var_vec = ($1);
+    var_vec->push_back(std::unique_ptr<BaseAST>($3));
+    $$ = var_vec;
   }
   ;
 
@@ -428,7 +421,7 @@ VarDecl
   : BType VarDefVec ';' {
     auto var_decl = new VarDeclAST();
     var_decl->b_type = unique_ptr<BaseAST>($1);
-    vector<unique_ptr<BaseAST> > *var_def_vec = ($2); // still ptr
+    std::vector<std::unique_ptr<BaseAST> > *var_def_vec = ($2); // still ptr
     for (auto &it : *var_def_vec) {
         var_decl->var_def_vec.push_back(move(it));
     }
