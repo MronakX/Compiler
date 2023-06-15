@@ -165,7 +165,7 @@ void Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &value)
 
 	// format for add, sub, mul, div, mod, and, or
 	auto print_basic_binary = [&] (std::string op) {
-		std::cout << "op" << " t0, t0, t1" << std::endl;
+		std::cout << TAB << op << " t0, t0, t1" << std::endl;
 	};
 
 	switch (op) {
@@ -182,7 +182,7 @@ void Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &value)
 			print_basic_binary("div");
 			break;
   		case KOOPA_RBO_MOD:
-			print_basic_binary("mod");
+			print_basic_binary("rem");
 			break;
 		case KOOPA_RBO_AND:
 			print_basic_binary("and");
@@ -244,11 +244,11 @@ void load(const koopa_raw_value_t &value, std::string type) {
 		switch (kind.tag) {
 			// li t0, 10
 			case KOOPA_RVT_INTEGER:
-				std::cout << TAB << "li t0, " << kind.data.integer.value << std::endl;
+				std::cout << TAB << "li a0, " << kind.data.integer.value << std::endl;
 				break;
 			// else, load stack
 			default:
-				std::cout << TAB << "lw t0, " << stack_size - value_map[value] << "(sp)" << std::endl;
+				std::cout << TAB << "lw a0, " << stack_size - value_map[value] << "(sp)" << std::endl;
 				break;
 		}
 	}
