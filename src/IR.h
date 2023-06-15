@@ -24,10 +24,11 @@ void store(const koopa_raw_value_t &value, std::string type);
 
 void Visit(const koopa_raw_program_t &program)
 {
-	std::cout << ".text" << std::endl;
 	// 访问所有全局变量
+	std::cout << ".data" << std::endl;
 	Visit(program.values);
 	// 访问所有函数
+	std::cout << ".text" << std::endl;
 	Visit(program.funcs);
 }
 
@@ -62,6 +63,9 @@ void Visit(const koopa_raw_slice_t &slice)
 // 访问函数
 void Visit(const koopa_raw_function_t &func)
 {
+	// skip declaration
+	if (func->bbs.len == 0)
+    	return;
 	// .globl main
 	std::cout << ".globl ";
 	printf("%s\n", func->name + 1); // func->name is "@main", should ignore the @
@@ -129,7 +133,7 @@ void Visit(const koopa_raw_value_t &value)
 void Visit(const koopa_raw_return_t &ret)
 {
 	// nullptr if return nothing;
-	koopa_raw_value_t ret_val = ret.value->kind.data.ret.value;
+	koopa_raw_value_t ret_val = ret.value;
 	if (ret_val) {
 		load(ret_val, "ret");	
 	}
