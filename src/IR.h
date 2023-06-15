@@ -16,8 +16,12 @@ void Visit(const koopa_raw_basic_block_t &bb);
 void Visit(const koopa_raw_value_t &value);
 
 void Visit(const koopa_raw_return_t &ret);
-void Visit(const koopa_raw_integer_t &integer);
+void Visit(const koopa_raw_integer_t &integer, const koopa_raw_value_t &value);
 void Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &value);
+void Visit(const koopa_raw_load_t &load_val, const koopa_raw_value_t &value);
+void Visit(const koopa_raw_store_t &store_val, const koopa_raw_value_t &value);
+void Visit(const koopa_raw_branch_t &branch, const koopa_raw_value_t &value);
+void Visit(const koopa_raw_jump_t &jump, const koopa_raw_value_t &value);
 
 void load(const koopa_raw_value_t &value, std::string type);
 void store(const koopa_raw_value_t &value, std::string type);
@@ -89,11 +93,11 @@ void Visit(const koopa_raw_function_t &func)
 	// align to 16 (top)
 	stack_size = (stack_size + ALIGN_NUM - 1) / ALIGN_NUM * ALIGN_NUM;
 	if (stack_size <= 2048)
-		std::cout << "  " << "addi sp, sp, " << std::to_string(-stack_size) << std::endl;
+		std::cout << TAB << "addi sp, sp, " << std::to_string(-stack_size) << std::endl;
 	// if stack size over 2048, 1. li t0, stacksize 2. add sp, sp, t0 (sp = sp + t0)
 	else {
-		std::cout << "  " << "li t0, " << std::to_string(-stack_size) << std::endl;
-		std::cout << "  " << "add sp, sp, t0" << std::endl;
+		std::cout << TAB << "li t0, " << std::to_string(-stack_size) << std::endl;
+		std::cout << TAB << "add sp, sp, t0" << std::endl;
 	}
 
 	Visit(func->bbs);
@@ -102,6 +106,7 @@ void Visit(const koopa_raw_function_t &func)
 // 访问基本块
 void Visit(const koopa_raw_basic_block_t &bb)
 {
+	std::cout << (bb->name + 1) << ":" << std::endl;
 	Visit(bb->insts);
 }
 
@@ -118,13 +123,29 @@ void Visit(const koopa_raw_value_t &value)
 		break;
 	case KOOPA_RVT_INTEGER:
 		// 访问 integer 指令
-		Visit(kind.data.integer);
+		Visit(kind.data.integer, value);
 		break;
 	case KOOPA_RVT_BINARY:
 		Visit(kind.data.binary, value);
 		break;
+	// @a_1 = alloc i32 is just a decl, nothing needs to be done
+	case KOOPA_RVT_ALLOC:
+		break;
+	case KOOPA_RVT_GLOBAL_ALLOC:
+		break;
+	case KOOPA_RVT_LOAD:
+		Visit(kind.data.load, value);
+		break;
+	case KOOPA_RVT_STORE:
+		Visit(kind.data.store, value);
+		break;
+	case KOOPA_RVT_BRANCH:
+		Visit(kind.data.branch, value);
+		break;
+	case KOOPA_RVT_JUMP:
+		Visit(kind.data.jump, value);
+		break;
 	default:
-		// 其他类型暂时遇不到
 		assert(false);
 	}
 }
@@ -138,16 +159,16 @@ void Visit(const koopa_raw_return_t &ret)
 		load(ret_val, "ret");	
 	}
 	if (stack_size <= 2048)
-		std::cout << "  " << "addi sp, sp, " << std::to_string(stack_size) << std::endl;
+		std::cout << TAB << "addi sp, sp, " << std::to_string(stack_size) << std::endl;
 	else {
-		std::cout << "  " << "li t0, " << std::to_string(stack_size) << std::endl;
-		std::cout << "  " << "addi sp, sp, t0" << std::endl;
+		std::cout << TAB << "li t0, " << std::to_string(stack_size) << std::endl;
+		std::cout << TAB << "addi sp, sp, t0" << std::endl;
 	}
-	std::cout << "  " << "ret" << std::endl;
+	std::cout << TAB << "ret" << std::endl;
 }
 
 // visit integer
-void Visit(const koopa_raw_integer_t &integer)
+void Visit(const koopa_raw_integer_t &integer, const koopa_raw_value_t &value)
 {
 	int int_val = integer.value;
 	std::cout << int_val << std::endl;
@@ -224,6 +245,60 @@ void Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &value)
 	store(value, "binary");
 }
 
+void Visit(const koopa_raw_load_t &load_val, const koopa_raw_value_t &value) {
+	auto src = load_val.src;
+	load(src, "load");
+	store(value, "load");
+}
+
+
+void Visit(const koopa_raw_store_t &store_val, const koopa_raw_value_t &value) {
+	auto dest = store_val.dest;
+	auto load_from = store_val.value;
+    load(load_from, "store");
+    store(dest, "store");
+}
+
+void Visit(const koopa_raw_branch_t &branch, const koopa_raw_value_t &value) {
+	// cond is a value
+	auto cond = branch.cond;
+
+	// what are these two mfs?
+	// auto false_args = branch.false_args;
+	// auto true_args = branch.true_args;
+
+	// two basic blocks, should print their name
+	auto false_bb = branch.false_bb;
+	auto true_bb = branch.true_bb;
+
+	// 1. load cond into t0
+	// 2. branch t0
+    load(cond, "branch");
+    std::cout << TAB << "beqz t0, " << (false_bb->name + 1) << std::endl;
+    std::cout << TAB << "j " << (true_bb->name + 1) << std::endl;
+}
+
+void Visit(const koopa_raw_jump_t &jump, const koopa_raw_value_t &value) {
+	// target basic block
+	// auto args = jump.args;
+	auto target = jump.target;
+	std::cout << TAB << "j " << (target->name + 1) << std::endl;
+}
+
+void Visit(const koopa_raw_global_alloc_t &jump, const koopa_raw_value_t &value)
+{
+/*
+    const koopa_raw_value_kind_t &kind = value->kind;
+    auto &alloc = kind.data.global_alloc;
+    auto &init = alloc.init;
+    if (init) {
+        load_value(init, "t0");
+        store_value(value, "t0");
+    } else {
+        assert(false);
+    }
+    */
+}
 #define LOAD_COMMAND(reg) switch (kind.tag) {	\
 			case KOOPA_RVT_INTEGER:	\
 				std::cout << TAB << "li " << reg << ", " << kind.data.integer.value << std::endl;	\
@@ -240,7 +315,7 @@ void Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &value)
 void load(const koopa_raw_value_t &value, std::string type) {
 	const auto &kind = value->kind;
 	if (type == "ret") {
-		// LOAD_COMMAND("t0")
+		// LOAD_COMMAND("a0")
 		switch (kind.tag) {
 			// li t0, 10
 			case KOOPA_RVT_INTEGER:
@@ -252,15 +327,42 @@ void load(const koopa_raw_value_t &value, std::string type) {
 				break;
 		}
 	}
-	if (type == "lhs") {
+	else if (type == "lhs") {
 		LOAD_COMMAND("t0");
 	}
 	else if (type == "rhs") {
 		LOAD_COMMAND("t1");
 	}
+	else if (type == "load") {
+		LOAD_COMMAND("t0");
+	}
+	else if (type == "store") {
+		LOAD_COMMAND("t0");
+	}
+	else if (type == "branch") {
+		LOAD_COMMAND("t0");
+	}
+	else {
+		assert(false);
+	}
 }
 
+#define STORE_COMMAND(reg) std::cout << TAB << "sw " << reg << ", " << stack_size - value_map[value] << "(sp)" << std::endl;
+
+// no integer should be store, so no specific
 void store(const koopa_raw_value_t &value, std::string type) {
 	// const auto &kind = value->kind;
-	std::cout << TAB << "sw t0, " << stack_size - value_map[value] << "(sp)" << std::endl;
+	if (type == "binary") {
+		// std::cout << TAB << "sw t0, " << stack_size - value_map[value] << "(sp)" << std::endl;
+		STORE_COMMAND("t0");
+	}
+	else if (type == "load") {
+		STORE_COMMAND("t0");
+	}
+	else if (type == "store") {
+		STORE_COMMAND("t0");
+	}
+	else {
+		assert(false);
+	}
 }

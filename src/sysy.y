@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 #include "AST.h"
-#define YYDEBUG 1
+// #define YYDEBUG 1
 #define YYERROR_VERBOSE 1
 // 声明 lexer 函数和错误处理函数
 int yylex();

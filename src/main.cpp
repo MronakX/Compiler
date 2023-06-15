@@ -45,7 +45,7 @@ int main(int argc, const char *argv[]) {
     // 调用 parser 函数, parser 函数会进一步调用 lexer 解析输入文件的
     unique_ptr<BaseAST> ast;
     unique_ptr<ExpBaseAST> exp_ast;
-    yydebug = 1;
+    // yydebug = 1;
     auto ret = yyparse(ast, exp_ast);
     assert(!ret);
 
